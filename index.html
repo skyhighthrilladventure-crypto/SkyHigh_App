@@ -412,13 +412,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
   _lockDownGlobals();
 
-  // ── CHECK: Firebase not configured? Show setup screen ──
-  const fbCfg = _loadFirebaseConfig();
-  if(!fbCfg || !fbCfg.databaseURL || !fbCfg.apiKey){
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('fb-setup-modal').style.display='flex';
-    return; // Don't proceed until Firebase is configured
-  }
+  // Firebase is hardcoded — no setup screen needed
 
   const loginScreen = document.getElementById('login-screen');
   if(loginScreen) loginScreen.style.display='none';
@@ -1756,30 +1750,28 @@ function startFirebaseSync(){
   if(_fbListenerAttached)return;
   _fbListenerAttached=true;
 
-  // Listen to business data
+  // Listen to business data — always re-render on ALL devices/tabs
   db.ref("appData").on("value",snap=>{
     const fresh=snap.val()||{};
-    if(JSON.stringify(fresh)!==JSON.stringify(appData)){
-      if(_hasUnsavedChanges){
-        // Keep current date data intact while employee is editing
-        const currentDateBackup = appData[currentDate];
-        appData = fresh;
-        if(currentDateBackup) appData[currentDate] = currentDateBackup;
-      } else {
-        appData = fresh;
-      }
-      // ALWAYS update dashboard on all tabs/devices instantly
-      renderDashboard();
-      // Also update other tabs if no unsaved changes
-      if(!_hasUnsavedChanges){
-        const active = document.querySelector(".tab-content.active");
-        if(active){
-          if(active.id === "tab-entry") renderAll();
-          else if(active.id === "tab-summary") renderSummary();
-          else if(active.id === "tab-history") renderHistory();
-        }
-      }
+    if(_hasUnsavedChanges){
+      // Employee is typing — preserve their current date but update rest
+      const backup = appData[currentDate];
+      appData = fresh || {};
+      if(backup) appData[currentDate] = backup;
+    } else {
+      appData = fresh || {};
     }
+    // Always update dashboard instantly on every device
+    try{ renderDashboard(); }catch(e){}
+    // Update whichever tab is open
+    try{
+      const active = document.querySelector(".tab-content.active");
+      if(active){
+        if(active.id==="tab-entry" && !_hasUnsavedChanges){ renderAll(); }
+        else if(active.id==="tab-summary"){ renderSummary(); }
+        else if(active.id==="tab-history"){ renderHistory(); }
+      }
+    }catch(e){}
   });
 
   // Listen to notifications (owner bell)
